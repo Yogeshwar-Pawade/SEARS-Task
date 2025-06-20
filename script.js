@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', function() {
         hideResults();
 
         try {
-            const response = await fetch('https://sears-task.onrender.com/api/summarize', {
+            const response = await fetch('/api/summarize', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -150,7 +150,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Agent status functions
     window.loadAgentStatus = async function() {
         try {
-            const response = await fetch('https://sears-task.onrender.com/api/agent/status');
+            const response = await fetch('/api/agent/status');
             const data = await response.json();
             
             if (response.ok) {
