@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Video Summarizer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 AI Agent Video Summarizer</h1>
+            <p>Advanced AI agent with planning and reasoning capabilities</p>
+            <div id="agentStatus" class="agent-status">
+                <span class="status-indicator">🤖</span>
+                <span class="status-text">AI Agent Ready</span>
+                <button id="agentStatusBtn" class="status-btn" onclick="loadAgentStatus()">Check Status</button>
+            </div>
+        </header>
+        
+        <main>
+            <form id="summaryForm" class="form-container">
+                <div class="input-group">
+                    <label for="youtubeUrl">YouTube URL:</label>
+                    <input 
+                        type="url" 
+                        id="youtubeUrl" 
+                        name="youtubeUrl" 
+                        placeholder="https://www.youtube.com/watch?v=..." 
+                        required
+                    >
+                </div>
+                
+                <button type="submit" id="generateBtn" class="generate-btn">
+                    <span class="btn-text">Generate Summary</span>
+                    <div class="loader" style="display: none;"></div>
+                </button>
+            </form>
+            
+            <div id="resultContainer" class="result-container" style="display: none;">
+                <h2>Video Summary</h2>
+                <div id="videoInfo" class="video-info"></div>
+                <div id="summary" class="summary"></div>
+            </div>
+            
+            <div id="errorContainer" class="error-container" style="display: none;">
+                <h2>Error</h2>
+                <p id="errorMessage"></p>
+            </div>
+        </main>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html> 
