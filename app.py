@@ -32,7 +32,15 @@ def extract_video_info(url):
     try:
         print(f"📝 Extracting video info from: {url}")
         
-        # Configure yt-dlp options
+        # Validate URL format first
+        if not url or not isinstance(url, str):
+            raise ValueError("Invalid URL: URL must be a non-empty string")
+        
+        # Basic YouTube URL validation
+        if not any(domain in url.lower() for domain in ['youtube.com', 'youtu.be', 'm.youtube.com']):
+            raise ValueError("Invalid URL: Must be a YouTube URL")
+        
+        # Configure yt-dlp options with better error handling
         ydl_opts = {
             'format': 'best[height<=720]/best',  # Download up to 720p for faster processing
             'outtmpl': '%(title)s.%(ext)s',
@@ -40,11 +48,30 @@ def extract_video_info(url):
             'writeinfojson': True,
             'writesubtitles': False,
             'writeautomaticsub': False,
+            'no_warnings': False,
+            'ignoreerrors': False,
+            'quiet': False,
+            'verbose': True,
+            # Add user agent to avoid blocking
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            # Add headers to avoid rate limiting
+            'headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-us,en;q=0.5',
+                'Accept-Encoding': 'gzip,deflate',
+                'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
+                'Keep-Alive': '300',
+                'Connection': 'keep-alive',
+            }
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             # Extract info without downloading first
             info = ydl.extract_info(url, download=False)
+            
+            if not info:
+                raise ValueError("Could not extract video information - video may be private or unavailable")
             
             video_info = {
                 'title': info.get('title', 'Unknown Title'),
@@ -53,14 +80,45 @@ def extract_video_info(url):
                 'description': info.get('description', ''),
                 'view_count': info.get('view_count', 0),
                 'upload_date': info.get('upload_date', ''),
+                'availability': info.get('availability', 'unknown'),
+                'age_limit': info.get('age_limit', 0),
             }
             
+            # Check if video is accessible
+            if info.get('availability') in ['private', 'premium_only', 'subscriber_only']:
+                raise ValueError(f"Video is not publicly accessible: {info.get('availability')}")
+                
             print(f"✅ Extracted video info: {video_info['title']}")
             return info, video_info
             
+    except yt_dlp.DownloadError as e:
+        error_msg = str(e)
+        print(f"❌ yt-dlp Download Error: {error_msg}")
+        
+        # Provide more specific error messages
+        if "private video" in error_msg.lower():
+            raise ValueError("This video is private and cannot be accessed")
+        elif "video unavailable" in error_msg.lower():
+            raise ValueError("This video is unavailable or has been removed")
+        elif "age-restricted" in error_msg.lower() or "sign in" in error_msg.lower():
+            raise ValueError("This video is age-restricted or requires sign-in")
+        elif "copyright" in error_msg.lower():
+            raise ValueError("This video has copyright restrictions")
+        elif "region" in error_msg.lower() or "location" in error_msg.lower():
+            raise ValueError("This video is not available in your region")
+        else:
+            raise ValueError(f"Cannot access video: {error_msg}")
+            
+    except ValueError as e:
+        print(f"❌ Validation Error: {e}")
+        raise e
+        
     except Exception as e:
-        print(f"❌ Error extracting video info: {e}")
-        return None, None
+        print(f"❌ Unexpected error extracting video info: {e}")
+        print(f"❌ Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+        raise ValueError(f"Failed to process video URL: {str(e)}")
 
 def download_video(url, output_dir):
     """Download video for analysis"""
@@ -71,22 +129,61 @@ def download_video(url, output_dir):
             'format': 'best[height<=720]/best',
             'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
             'extract_flat': False,
+            'no_warnings': False,
+            'ignoreerrors': False,
+            # Add user agent to avoid blocking
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            # Add headers to avoid rate limiting
+            'headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-us,en;q=0.5',
+                'Accept-Encoding': 'gzip,deflate',
+                'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
+                'Keep-Alive': '300',
+                'Connection': 'keep-alive',
+            }
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
+            
+            if not info:
+                raise ValueError("Failed to download video - no information received")
             
             # Find the downloaded file
             video_title = info.get('title', 'video')
             ext = info.get('ext', 'mp4')
             video_path = os.path.join(output_dir, f"{video_title}.{ext}")
             
+            # Verify file was actually downloaded
+            if not os.path.exists(video_path):
+                # Try to find any video file in the directory
+                video_files = [f for f in os.listdir(output_dir) if f.endswith(('.mp4', '.webm', '.mkv', '.avi'))]
+                if video_files:
+                    video_path = os.path.join(output_dir, video_files[0])
+                    print(f"📝 Found alternative video file: {video_path}")
+                else:
+                    raise FileNotFoundError(f"Downloaded video file not found at {video_path}")
+            
             print(f"✅ Video downloaded: {video_path}")
             return video_path, info
             
+    except yt_dlp.DownloadError as e:
+        error_msg = str(e)
+        print(f"❌ yt-dlp Download Error: {error_msg}")
+        raise ValueError(f"Failed to download video: {error_msg}")
+        
+    except FileNotFoundError as e:
+        print(f"❌ File not found after download: {e}")
+        raise ValueError("Video download completed but file not found - may be a server issue")
+        
     except Exception as e:
-        print(f"❌ Error downloading video: {e}")
-        return None, None
+        print(f"❌ Unexpected error downloading video: {e}")
+        print(f"❌ Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+        raise ValueError(f"Failed to download video: {str(e)}")
 
 def extract_frames(video_path, num_frames=8):
     """Extract key frames from video for visual analysis"""
@@ -262,22 +359,59 @@ def summarize_video():
         print(f"📝 Created temp directory: {temp_dir}")
         
         # Extract video information first (without downloading)
-        video_info_raw, video_info = extract_video_info(youtube_url)
-        if not video_info:
-            print("❌ Could not extract video information")
-            return jsonify({'error': 'Invalid YouTube URL or video not accessible'}), 400
+        try:
+            video_info_raw, video_info = extract_video_info(youtube_url)
+            if not video_info:
+                print("❌ Could not extract video information")
+                return jsonify({
+                    'error': 'Invalid YouTube URL or video not accessible',
+                    'suggestion': 'Please check that the URL is correct and the video is publicly accessible.',
+                    'example_url': 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+                }), 400
+        except ValueError as e:
+            # Handle specific validation errors with helpful messages
+            error_msg = str(e)
+            print(f"❌ Video validation error: {error_msg}")
+            return jsonify({
+                'error': error_msg,
+                'suggestion': 'Please try a different public YouTube video that is not age-restricted or region-locked.',
+                'example_url': 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+            }), 400
+        except Exception as e:
+            print(f"❌ Unexpected error during video info extraction: {e}")
+            return jsonify({
+                'error': 'Failed to process YouTube URL',
+                'details': str(e),
+                'suggestion': 'Please check your internet connection and try again with a different video.'
+            }), 400
         
         print(f"✅ Video info extracted: {video_info['title']}")
         
         # Download video for analysis
         print("📝 Downloading video for analysis...")
-        video_path, download_info = download_video(youtube_url, temp_dir)
-        
-        if not video_path or not os.path.exists(video_path):
-            print("❌ Could not download video")
+        try:
+            video_path, download_info = download_video(youtube_url, temp_dir)
+            
+            if not video_path or not os.path.exists(video_path):
+                print("❌ Could not download video")
+                return jsonify({
+                    'error': 'Could not download video for analysis. The video may be private or restricted.',
+                    'suggestion': 'Try a different public YouTube video that is accessible without age verification.'
+                }), 400
+                
+        except ValueError as e:
+            error_msg = str(e)
+            print(f"❌ Video download validation error: {error_msg}")
             return jsonify({
-                'error': 'Could not download video for analysis. The video may be private or restricted.',
-                'suggestion': 'Try a different public YouTube video.'
+                'error': f'Download failed: {error_msg}',
+                'suggestion': 'The video may be restricted, region-locked, or require special permissions. Try a different public video.'
+            }), 400
+        except Exception as e:
+            print(f"❌ Unexpected error during video download: {e}")
+            return jsonify({
+                'error': 'Video download failed due to technical issues',
+                'details': str(e),
+                'suggestion': 'This might be a temporary server issue. Please try again later.'
             }), 400
         
         print(f"✅ Video downloaded successfully: {video_path}")
@@ -331,6 +465,58 @@ def summarize_video():
 def test_api():
     """Test endpoint to verify API is working"""
     return jsonify({'status': 'API is working!', 'timestamp': str(os.popen('date').read().strip())})
+
+# Add URL test endpoint for debugging
+@app.route('/api/test-url', methods=['POST'])
+def test_youtube_url():
+    """Test endpoint to check if a YouTube URL can be accessed"""
+    try:
+        data = request.get_json()
+        if not data or 'url' not in data:
+            return jsonify({'error': 'YouTube URL is required'}), 400
+        
+        youtube_url = data['url']
+        print(f"🧪 Testing YouTube URL: {youtube_url}")
+        
+        # Test URL validation
+        try:
+            video_info_raw, video_info = extract_video_info(youtube_url)
+            
+            return jsonify({
+                'status': 'success',
+                'message': 'URL is accessible',
+                'video_info': {
+                    'title': video_info['title'],
+                    'duration': video_info['duration'],
+                    'channel': video_info['channel'],
+                    'availability': video_info.get('availability', 'unknown'),
+                    'age_limit': video_info.get('age_limit', 0)
+                },
+                'test_passed': True
+            })
+            
+        except ValueError as e:
+            return jsonify({
+                'status': 'validation_error',
+                'error': str(e),
+                'test_passed': False,
+                'suggestion': 'Try a different public YouTube video'
+            }), 400
+            
+        except Exception as e:
+            return jsonify({
+                'status': 'technical_error',
+                'error': str(e),
+                'test_passed': False,
+                'suggestion': 'Technical issue - check server logs'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'status': 'request_error',
+            'error': str(e),
+            'test_passed': False
+        }), 500
 
 # Add agent status endpoint
 @app.route('/api/agent/status', methods=['GET'])

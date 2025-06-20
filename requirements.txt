@@ -1,7 +1,7 @@
 Flask>=3.0.0
 Flask-CORS>=4.0.0
-google-generativeai>=0.8.0,<0.9.0
-yt-dlp>=2023.12.30
+google-generativeai>=0.8.0
+yt-dlp>=2024.1.0
 opencv-python>=4.8.0
 Pillow>=10.0.0
 requests>=2.31.0
